@@ -713,7 +713,7 @@ time.simscen <- function(simscen){
 
 print.simscen <- function(simscen){
 
-  print(simscen$scen)
+    print(simscen$scen, digits=3)
 
 }
 
@@ -733,7 +733,7 @@ attr(simscen,'cens_type')
 
 
 
-complete_scen <- function(simscen, limit = TRUE){
+expand_scen <- function(simscen, limit = TRUE){
 
   scen <- Scenarios(simscen)
   lscen <- vapply(scen, length, integer(1))
@@ -759,6 +759,31 @@ complete_scen <- function(simscen, limit = TRUE){
   } else {
 
     stop('Can not be completed. There are missing parameters')
+
+  }
+
+
+}
+
+complete_scen <- function(simscen){
+
+  scen <- Scenarios(simscen)
+  lscen <- vapply(scen, length, integer(1))
+  allfill <- all(lscen  > 0)
+    all1 <- length(unique(lscen)) > 1
+    
+    if(allfill & all1 ){
+      ds_name <- simscen$scen$dataset
+      simscen$scen <- do.call('cbind',simscen$scen)
+      suppressWarnings(simscen$scen <- apply(simscen$scen,2, as.numeric))
+      simscen$scen <- as.data.frame(simscen$scen)
+      simscen$scen[ ,'dataset'] <- ds_name
+      attr(simscen$scen,"out.attrs") <- NULL
+      simscen
+    
+  } else {
+
+    stop('Already complete or missing parameters')
 
   }
 
@@ -1314,36 +1339,37 @@ shake <- function(simscen, n = 1 , what ='all' ,amount = 1/10){
 }
 
 
+AdjSim <- function(simscen, groups = NULL, ret_sobj = FALSE, mc.cores = mc.control ){
+    nscen <- nrow(Scenarios(simscen))
+    nsim <- N(simscen)
+    pb <- txtProgressBar(0,1, style = 3)
+    cat('\n')
+    adjsim <- mclapply(seq_len(nscen),
+                       function(i){
+                           ret <- .adjsim_row(simscen[i, ],
+                                              n = nsim,
+                                              ret_sobj = ret_sobj)
+                           setTxtProgressBar(pb, i/nscen)
+                           ret
+                       }, mc.cores = mc.cores)
 
-AdjSim <- function(simscen, ret_sobj = FALSE, mc.cores = mc.control ){
+    attr(adjsim, "adjsurv") <-   attr(simscen, 'adjsurv')
+    attr(adjsim, 'n') <-   attr( simscen, 'n')
+    attr(adjsim,'interest_lev') <-   attr(simscen, 'interest_lev')
+    attr(adjsim, 'weight_lim') <-   attr(simscen, 'weight_lim')
+    attr(adjsim, 'cont_vars') <-   attr( simscen, 'cont_vars')
+    attr(adjsim, 'cens_type') <-   attr(simscen, 'cens_type')
+    attr(adjsim,'max_t') <-   attr(simscen, 'max_t')
+    attr(adjsim, 'simscen') <-   simscen
+    if(is.null(groups)) groups <- 1:nrow(simscen$scen)
+    attr(adjsim, 'groups') <-  groups
+    
+    class(adjsim) <- c('adjsim')
+    setTxtProgressBar(pb, 1)
+    close(pb)
 
-  nscen <- nrow(Scenarios(simscen))
-  nsim <- N(simscen)
-  pb <- txtProgressBar(0,1, style = 3)
-  cat('\n')
-  adjsim <- mclapply(seq_len(nscen),
-                   function(i){
-                     ret <- .adjsim_row(simscen[i, ],
-                                      n = nsim,
-                                        ret_sobj = ret_sobj)
-                     setTxtProgressBar(pb, i/nscen)
-                     ret
-                   }, mc.cores = mc.cores)
-
-  attr(adjsim, "adjsurv") <-   attr(simscen, 'adjsurv')
-  attr(adjsim, 'n') <-   attr( simscen, 'n')
-  attr(adjsim,'interest_lev') <-   attr(simscen, 'interest_lev')
-  attr(  adjsim, 'weight_lim') <-   attr(simscen, 'weight_lim')
-  attr(  adjsim, 'cont_vars') <-   attr( simscen, 'cont_vars')
-  attr( adjsim, 'cens_type') <-   attr(simscen, 'cens_type')
-  attr(adjsim,'max_t') <-   attr(simscen, 'max_t')
-  attr(adjsim, 'simscen') <-   simscen
-  class(adjsim) <- c('adjsim')
-  setTxtProgressBar(pb, 1)
-  close(pb)
-
-  attr(adjsim,'print') <- summary(adjsim)
-  adjsim
+    attr(adjsim,'print') <- summary(adjsim, groups = groups)
+    adjsim
 }
 
 
@@ -1483,55 +1509,66 @@ print.adjsim <- function(adjsim){
 
 
 
-plot.adjsim <- function(adjsim, which , scen_summ = mean, global_summ = mean, nrisk_w = NULL, squared = TRUE, plot = TRUE, mc.cores = mc.control, ... ){
+plot.adjsim <- function(adjsim, which , adjust = NULL, scen_summ = mean, global_summ = mean, nrisk_w = NULL, squared = TRUE, plot = TRUE, mc.cores = mc.control, ... ){
 
-  scen <- mclapply( resid(adjsim, squared= squared, nrisk_w = nrisk_w),
-                 function(ajs){
-                   apply(ajs,1:2  , scen_summ)
-                 }, mc.cores = mc.cores )
+    scen <- mclapply( resid(adjsim, squared= squared, nrisk_w = nrisk_w),
+                     function(ajs){
+                         apply(ajs,1:2  , scen_summ)
+                     }, mc.cores = mc.cores )
 
-  scen <- simplify2array(scen)
+    scen <- simplify2array(scen)
 
 
-  scen <- apply(scen,1:2, global_summ)
+    scen <- apply(scen,1:2, global_summ)
 
-  group <- factor(rep(levels(adjsim), each = nrow(scen) / nlevels(adjsim)))
+    group <- factor(rep(levels(adjsim), each = nrow(scen) / nlevels(adjsim)))
 
-  if(missing(which)) which <- seq_along(levels(adjsim))
-  wlen <- length(which)
+    if(missing(which)) which <- seq_along(levels(adjsim))
+    wlen <- length(which)
 
-  if(wlen > 2 && wlen %% 2 > 0) {
-    lo <- c(seq_along(which),0)
-    lo <- matrix( lo , ncol = 2, byrow = TRUE)
-  } else {
-    lo <- seq_along(which)
-    lo <- matrix(lo, ncol = 2, byrow = TRUE)
-  }
+    if(wlen > 2 && wlen %% 2 > 0) {
+        lo <- c(seq_along(which),0)
+        lo <- matrix( lo , ncol = 2, byrow = TRUE)
+    } else {
+        lo <- seq_along(which)
+        lo <- matrix(lo, ncol = 2, byrow = TRUE)
+    }
 
-  ol <- layout(lo)
-  op <- par( cex =.7)
-  invisible({
-  lapply(levels(adjsim)[which], function(lvl){
+    if( is.null(adjust) ){
+        
+        adjust <- 2:(ncol(adjsim[[1]]$scurves) - 1)
+            
+            } else {
+                
+                adjust  <- adjust  + 1
+            }
+    
+    ol <- layout(lo)
+    op <- par( cex =.7)
+    invisible({
+        lapply(levels(adjsim)[which], function(lvl){
 
-           if(squared) yl <- 'Averaged square error'
-           else yl <- 'Averaged error'
+            if(squared) yl <- 'Averaged square error'
+            else yl <- 'Averaged error'
 
-           xl <- 'Ordered observed times'
+            xl <- 'Ordered observed times'
 
-           matplot(scen[group == lvl, ], type ='l',
-                   ylab = yl,
-                   xlab = xl,
-                   col = 1:ncol(scen),
-                   lty = 1:ncol(scen),
-                   ...)
-           abline(h =0, col ='grey', lty =3)
-           title(lvl)
-           legend('topright', colnames(scen),lty =1:ncol(scen),
-                  col = 1:ncol(scen), cex =.9, bty ='n')
-         }    )
+            matplot(scen[group == lvl, c(1,adjust ) ], type ='l',
+                    ylab = yl,
+                    xlab = xl,
+                    col = 1:ncol(scen),
+                    lty = 1:ncol(scen),
+                    ...)
+            abline(h =0, col ='grey', lty =3)
+            title(lvl)
+            legend('topleft', colnames(scen[ , c(1,adjust )] ),
+                   lty =1:ncol(scen[ , c(1,adjust )]),
+                   col = 1:ncol(scen[ , c(1,adjust )]),
+                   cex =.9, bty ='n')
+        }    )
     })
-  par(op)
-  layout(1)
+    par(op)
+    layout(1)
 }
 
 
@@ -1575,7 +1612,7 @@ survplot <- function(adjsim, scenario = 1, replica = 1, adjust, which, ...){
                    ylab = yl,
                    xlab = xl, ...)
            title(lvl)
-           legend('topright',
+           legend('bottomleft',
                   colnames(scurves),
                   lty =sq_lv,
                   col = sq_lv,
@@ -1647,13 +1684,14 @@ test_scen <- function(sm){
 ## }
 
 
-summary.adjsim <- function(adjsim, rm.failed = FALSE, squared = TRUE, nrisk_w = NULL, conf = 0.95, mc.cores = mc.control){
+summary.adjsim <- function(adjsim, groups = NULL, rm.failed = FALSE, squared = TRUE, nrisk_w = NULL, conf = 0.95, mc.cores = mc.control){
 
-  ret <- .adjsimsm_scen(adjsim,
-                        squared = squared,
-                        nrisk_w =nrisk_w,
-                        rm.failed = rm.failed,
-                        mc.cores = mc.cores)
+    ret <- .adjsimsm_scen(adjsim, 
+                          groups = groups,
+                          squared = squared,
+                          mc.cores = mc.cores,
+                          nrisk_w =nrisk_w,
+                          rm.failed = rm.failed)
 
 
   failed <- Failed(adjsim , scen = FALSE)
@@ -1673,55 +1711,60 @@ summary.adjsim <- function(adjsim, rm.failed = FALSE, squared = TRUE, nrisk_w = 
 
 
 
-.adjsimsm <- function(adjsim, squared, nrisk_w, conf, mc.cores){
-  try({
-  cat('summarizing:\n')
-  pb <- txtProgressBar(0,1, style =3)
-  resd <- resid(adjsim, nrisk_w = nrisk_w,squared = squared)
+## .adjsimsm <- function(adjsim, squared, nrisk_w, conf, mc.cores){
+##   try({
+##   cat('summarizing:\n')
+##   pb <- txtProgressBar(0,1, style =3)
+##   resd <- resid(adjsim, nrisk_w = nrisk_w,squared = squared)
 
-  setTxtProgressBar(pb, 1/5)
-  mean_scen <- mclapply(resd, function(x){
-                          nms <- colnames(x)
-                          d <- dim(x)
-                          ret <- colMeans(x, na.rm = TRUE,
-                                          dims= 1)
-                          rownames(ret) <- nms
-                          ret
-                        }            , mc.cores = mc.cores)
+##   setTxtProgressBar(pb, 1/5)
+##   mean_scen <- mclapply(resd, function(x){
+##                           nms <- colnames(x)
+##                           d <- dim(x)
+##                           ret <- colMeans(x, na.rm = TRUE,
+##                                           dims= 1)
+##                           rownames(ret) <- nms
+##                           ret
+##                         }            , mc.cores = mc.cores)
 
-  setTxtProgressBar(pb, 2/5)
+##   setTxtProgressBar(pb, 2/5)
 
-  sm <- simplify2array(mean_scen)
-  nms <- rownames(sm)
-  d <- dim(sm)
-  nwd <- c(d[1], d[2] * d[3])
-  dim(sm) <- nwd
-  me <- rowMeans(sm, na.rm = TRUE)
+##   sm <- simplify2array(mean_scen)
+##   nms <- rownames(sm)
+##   d <- dim(sm)
+##   nwd <- c(d[1], d[2] * d[3])
+##   dim(sm) <- nwd
+##   me <- rowMeans(sm, na.rm = TRUE)
 
-  setTxtProgressBar(pb, 3/5)
+##   setTxtProgressBar(pb, 3/5)
 
-  se <- apply(sm, 1, sd)
-  sm <- rbind(me, se)
-  colnames(sm) <- nms
-  rownames(sm) <- c('mean', 'se')
+##   se <- apply(sm, 1, sd)
+##   sm <- rbind(me, se)
+##   colnames(sm) <- nms
+##   rownames(sm) <- c('mean', 'se')
 
-  setTxtProgressBar(pb, 4/5)
+##   setTxtProgressBar(pb, 4/5)
 
-  test <- mclapply(mean_scen, test_scen, mc.cores = mc.cores)
-  test <- do.call('cbind',test)
-  test <- apply(test,1, simplify2array)
-  ranksm <- rowMeans(test[[4]])
+##   test <- mclapply(mean_scen, test_scen, mc.cores = mc.cores)
+##   test <- do.call('cbind',test)
+##   test <- apply(test,1, simplify2array)
+##   ranksm <- rowMeans(test[[4]])
 
-  test[[1]] <- matrix(test[[1]], nrow = 1)
-  sign <- lapply(test[1:3], function(x){
-                   rowMeans(x  < (1 - conf), na.rm = TRUE)
-                 } )
+##   test[[1]] <- matrix(test[[1]], nrow = 1)
+##   sign <- lapply(test[1:3], function(x){
+##                    rowMeans(x  < (1 - conf), na.rm = TRUE)
+##                  } )
 
-  setTxtProgressBar(pb, 5/5)
-  close(pb)
-      c(sm =list(sm), sign, ranksm =list(ranksm))
-    })
-}
+##   setTxtProgressBar(pb, 5/5)
+##   close(pb)
+##   lapply(sms[[2]][-1], `colnames<-`, letters[1:7])
+##   ret <- c(sm =list(sm), sign, ranksm =list(ranksm))
+##   names(ret$comp[1] ) <- groups
+##   ret$comp <- lapply(ret$comp[-1], `colnames<-`, groups)
+##   colnames(ret$sm ) <- groups
+##   ret
+##     })
+## }
 
 
 
@@ -1740,13 +1783,19 @@ summary.adjsim <- function(adjsim, rm.failed = FALSE, squared = TRUE, nrisk_w = 
       setTxtProgressBar(pb, 1/5)
       resd <- resid(adjsim, nrisk_w = nrisk_w,squared = squared)
 
-
       setTxtProgressBar(pb, 2/5)
 
-      if(is.null(groups)) groups <- seq_len(length(adjsim))
-      scen_mean <- mclapply(resd, colMeans , mc.cores = mc.cores,
-                            na.rm = TRUE, dim = 1)
+      if(is.null(groups)) groups <- attr(adjsim,'groups')
 
+      scen_mean <- mclapply(resd , colMeans , mc.cores = mc.cores,
+                            na.rm = TRUE, dim = 1)
+      
+      scen_mean <- mclapply(unique(groups),
+                            function(g){
+                                do.call('cbind',
+                                        scen_mean[groups == g])
+                               },
+                               mc.cores = mc.cores)
       setTxtProgressBar(pb, 3/5)
       sm <- mclapply(scen_mean, rowMeans, mc.cores = mc.cores)
       sm <- simplify2array(sm)
@@ -1760,7 +1809,16 @@ summary.adjsim <- function(adjsim, rm.failed = FALSE, squared = TRUE, nrisk_w = 
       close(pb)
       cat('\n')
       ret <- list(sm = sm, comp = test)
+
+      grp_names <- unique(groups)
+      names(ret$comp$friedman.test) <- grp_names
+      colnames(ret$comp$ttest) <- grp_names
+      colnames(ret$comp$wilcoxon) <- grp_names
+      colnames(ret$comp$mranks) <- grp_names
+      colnames(ret$sm ) <- grp_names
+      
       class(ret) <- c('adjssm',class(ret))
+      attr(ret, 'groups') <- groups
       ret
     })
 }
@@ -1785,7 +1843,7 @@ print.adjssm <- function(x, maxprint = 5){
 }
 
 
-plot.adjssm <- function(adjssm, g = NULL, ranked = FALSE, conf = .95, ...){
+plot.adjssm <- function(adjssm, ranked = FALSE, conf = .95, ...){
 
   if(ranked){
 
@@ -1800,7 +1858,8 @@ plot.adjssm <- function(adjssm, g = NULL, ranked = FALSE, conf = .95, ...){
   nr <- nrow(rnk)
   nc <- ncol(rnk)
 
-  if( is.null(g) ) g <- seq_len(ncol(rnk))
+  groups <- attr(adjssm,'groups')  
+   g <- 1:nlevels(as.factor(groups))
 
   friedm <- rep(NA,nc)
   friedm[which(adjssm$comp$friedman.test < (1-conf))] <- 8
@@ -1818,13 +1877,18 @@ plot.adjssm <- function(adjssm, g = NULL, ranked = FALSE, conf = .95, ...){
 
   reset_par <- par(mar = c(5, 4, 4, 6))
   matplot(y = t(rnk), x = g, type = 'l',
-          ylim =c(nr ,1), bty = 'L')
-
+          ylim =c(nr ,1), bty = 'L',
+          ylab = 'mean rank',
+          xaxt = 'n',
+          xlab = 'scenarios',
+          ...)
+    axis(1,g, labels=levels(groups))
+    
 invisible({
-  Map(function(adjssm, pch, cl){
-        points(y = adjssm, x =g, pch = pch, col = cl)
+  Map(function(ajsm, pch, cl){
+      points( x =g, y=ajsm , pch = pch, col = cl)
       } ,
-      y = data.frame(t(rnk[-1, ])),
+      ajsm = data.frame(t(rnk[-1, ])),
       pch = data.frame(t(pchidx)),
       cl = c(2:6,1 : (nr -6)))
   })
@@ -1833,7 +1897,7 @@ invisible({
          pch = friedm,
          cex =.8)
 
-  legend(x = nc+ nc * 1e-2 /2, y = 1, rownames(y$sm),
+  legend(x = nc+ nc * 1e-2 /2, y = 1, rownames(adjssm$sm),
          title = 'Adjusting method',
          xpd = TRUE,
          cex = .7,
@@ -1846,9 +1910,9 @@ invisible({
          cex = .7,
          pch = c(1,3, 8),
          box.lwd = 0, title = paste('p-val <', (1 - conf)))
+    title('Mean rank evolution')
 
   par(reset_par)
-
 
 }
 

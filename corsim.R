@@ -1,6 +1,9 @@
 library(MASS)
 library(Matrix)
 
+
+                                        # Create a symetric Matrix
+
 Rho <- function(dim, uptri){
   S <- diag(dim)
   S[lower.tri(S)] <- uptri
@@ -9,6 +12,7 @@ Rho <- function(dim, uptri){
   S
 }
 
+                                        # Empirical quantile function F(x)^{-1}
 
 approxqf <- function(x){
   cdf <- ecdf(c(x))
@@ -27,6 +31,7 @@ approxqf <- function(x){
 
 }
 
+
 runifcor <- function(nms, n, rho){
   rho <- nearPD(rho)$mat
   lnms <- length(nms)
@@ -38,7 +43,6 @@ runifcor <- function(nms, n, rho){
   X <- data.frame(Xunif)
   X
 }
-
 
 
 
