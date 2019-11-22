@@ -1,6 +1,6 @@
 library(MASS)
 library(Matrix)
-
+#
 
                                         # Create a symetric Matrix
 
