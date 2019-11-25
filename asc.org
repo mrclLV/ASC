@@ -1,0 +1,190 @@
+
+* Ajustar Corbes
+
+** UI
+
+AdjSurv
+
+*** Adjust Methods
+**** KM
+**** Marginals
+***** selections
+***** weighting
+***** ipw
+ipw
+ipw_function
+ipw_logi
+ipw_rf
+
+**** Condicionals
+***** Stratificació
+***** Cox
+****** Average Covariate Method
+cox 
+# Check which method
+
+****** Corrected Group Prognosis
+
+*** Diagnòstic d'ajust
+
+**** Weightogram
+**** Events Esperats observats?
+**** log-log plot
+
+** Aux
+***  Functional form definition
+cont
+interest
+
+
+** Classes
+*** adjs
+****  Variables
+
+Covariates
+
+**** Adjusting varaiables (Covariates)
+
+Adjvars
+
+**** Beta Coefficients of variables
+
+betas
+betas<-
+
+**** Formula
+formula.AdjSurv
+
+**** Interest variable
+Interest
+
+**** Which vars are Continous
+continous
+
+*** adjsfit
+**** Group Variable?
+group
+
+
+* Simular dades de Supervivència
+
+** UI
+*** Definicio Simulació
+define_scen
+complete_scen
+
+*** Executar simulació
+AdjSim
+
+*** Diagnòstic de Simulacions
+**** Weightogram
+**** Summary
+***** Comparacio Quadrats
+****** Events Esperats observats?
+****** Relative Cumulative Hazard (nieto)
+
+
+** Aux
+***  Simular Estructura de Covariables
+# Corsim.R
+*** Simular Dades de supervivència amb estructura de cox
+dweibull_scmix
+
+
+** Classes
+
+*** scen
+**** dataset
+dataset
+dataset<-
+
+**** Censored observations Proportion
+
+cens
+cens<-
+
+**** Censored type
+
+cens_type
+cens_type<-
+
+
+*** adjsim
++ [.adjsim
+**** Survival Curves Data
+Curves
+
+**** Failed Iterations
+Failed
+
+
+* Notes
+
+** Per classificar
+
+
+kaplan_meier
+levels.adjsim
+levels.AdjSurv
+lines.adjsfit
+N
+Nrisk
+plot.adjsfit
+plot.adjsim
+plot.adjssm
+print.adjsim
+print.adjssm
+print.AdjSurv
+print.simscen
+pweibull_scmix
+Reference
+reference_pop
+resampling
+residuals.adjsim
+scales
+scales<-
+Scenarios
+scurve_survexp
+scurve_survfit
+se
+Sfit
+shake
+shapes
+shapes<-
+[.simscen
+Sobj
+Sobj.adjsim
+Sobj.AdjSurv
+stratif
+summary.adjsim
+surv
+survplot
+sweibfun_scmix
+sweibull_scmix
+terms.AdjSurv
+test_scen
+time.adjsfit
+time.adjsim
+time.AdjSurv
+time.simscen
+weib_scurve
+weib_sim
+whichcont
+
+
+
+** TODO Idees diagnostic                                               :impl:
+
+*** Comparació corbes
+
+Al final ens interessa: 
++ Es toquen o no
++ Hi ha distància / no hi ha distància
++ Un log - rank ?
++ Un log - log de S(t)
+
+*** Diagnostics
+****  Sensitivity Analysis
+**** Influence diagnostics for GLM's (Williams)
+
+
